@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Caption Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+        .small-loader {
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-top: 2px solid #4f46e5;
+            width: 16px;
+            height: 16px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .transition-all {
+            transition: all 0.3s ease-in-out;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center min-h-screen p-4 bg-gradient-to-br from-indigo-50 via-white to-cyan-50 dark:from-gray-800 dark:via-gray-900 dark:to-indigo-900">
+
+    <div class="w-full max-w-3xl bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 md:p-8 space-y-6">
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-gray-800 dark:text-white">AI Video Caption Generator</h1>
+            <p class="text-gray-600 dark:text-gray-300 mt-2">Generate transcripts, summaries, highlights, and social posts from any video.</p>
+        </div>
+
+        <!-- API Key Section -->
+        <div class="space-y-2 border-t border-gray-200 dark:border-gray-700 pt-6 fade-in">
+            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-300">Configuration</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                You need a Gemini API key. Get one from
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-indigo-500 hover:underline">Google AI Studio</a>.
+            </p>
+            <div class="flex items-center gap-2">
+                <input type="password" id="api-key-input" placeholder="Enter your Gemini API key" class="flex-grow p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+                <button id="save-key-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-all shadow-sm hover:shadow-md">Save</button>
+            </div>
+        </div>
+
+        <!-- Video Upload Section -->
+        <div id="upload-section" class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all fade-in">
+            <input type="file" id="video-upload" class="hidden" accept="video/*">
+            <div id="upload-prompt">
+                 <svg class="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    <span class="font-semibold text-indigo-600 dark:text-indigo-400">Click to upload</span> or drag and drop a video.
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">MP4, MOV, WEBM, etc. (Max 50MB)</p>
+            </div>
+        </div>
+
+        <!-- Video Preview and Processing Section -->
+        <div id="processing-section" class="hidden space-y-4 fade-in">
+            <video id="video-preview" class="w-full rounded-lg bg-black shadow-inner" controls></video>
+            <div id="loader-container" class="hidden flex flex-col items-center justify-center space-y-3 p-4 bg-indigo-500 text-white rounded-lg">
+                <div class="loader"></div>
+                <p id="status-text" class="font-medium">Processing video...</p>
+            </div>
+            <button id="generate-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl disabled:shadow-lg">
+                Generate Captions
+            </button>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="hidden space-y-6 fade-in">
+            <div>
+                <h2 class="text-xl font-semibold">Transcript</h2>
+                <textarea id="transcript-output" rows="8" class="w-full mt-2 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" readonly></textarea>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button id="copy-transcript-btn" class="flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-green-700 transition-all shadow-md hover:shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    Copy Transcript
+                </button>
+                <button id="download-srt-btn" class="flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download .SRT
+                </button>
+            </div>
+
+            <!-- AI Content Tools Section -->
+            <div id="ai-tools-section" class="space-y-4 border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h2 class="text-xl font-semibold text-center">✨ AI Content Tools ✨</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button id="summarize-btn" class="ai-tool-btn">Summarize Content</button>
+                    <button id="highlights-btn" class="ai-tool-btn">Find Key Moments</button>
+                    <button id="social-btn" class="ai-tool-btn">Draft Social Post</button>
+                </div>
+                <!-- AI Tool Outputs -->
+                <div id="summary-output-container" class="hidden ai-output-container"></div>
+                <div id="highlights-output-container" class="hidden ai-output-container"></div>
+                <div id="social-output-container" class="hidden ai-output-container"></div>
+            </div>
+
+             <button id="start-over-btn" class="flex items-center justify-center gap-2 w-full bg-gray-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-gray-600 transition-all shadow-md hover:shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5" /><path stroke-linecap="round" stroke-linejoin="round" d="M4 9a9 9 0 0114.65-4.65l-2.12 2.12A5.001 5.001 0 009 14.07V15" /><path stroke-linecap="round" stroke-linejoin="round" d="M20 15a9 9 0 01-14.65 4.65l2.12-2.12A5.001 5.001 0 0015 9.93V9" /></svg>
+                Start Over
+            </button>
+        </div>
+        
+        <!-- Error Message Box -->
+        <div id="error-box" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative fade-in" role="alert">
+            <strong class="font-bold">Error:</strong>
+            <span class="block sm:inline" id="error-message"></span>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM Element References
+        const uploadSection = document.getElementById('upload-section');
+        const videoUpload = document.getElementById('video-upload');
+        const processingSection = document.getElementById('processing-section');
+        const videoPreview = document.getElementById('video-preview');
+        const generateBtn = document.getElementById('generate-btn');
+        const loaderContainer = document.getElementById('loader-container');
+        const statusText = document.getElementById('status-text');
+        const resultsSection = document.getElementById('results-section');
+        const transcriptOutput = document.getElementById('transcript-output');
+        const copyTranscriptBtn = document.getElementById('copy-transcript-btn');
+        const downloadSrtBtn = document.getElementById('download-srt-btn');
+        const startOverBtn = document.getElementById('start-over-btn');
+        const errorBox = document.getElementById('error-box');
+        const errorMessage = document.getElementById('error-message');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const saveKeyBtn = document.getElementById('save-key-btn');
+        
+        // AI Tools References
+        const summarizeBtn = document.getElementById('summarize-btn');
+        const highlightsBtn = document.getElementById('highlights-btn');
+        const socialBtn = document.getElementById('social-btn');
+        const summaryOutputContainer = document.getElementById('summary-output-container');
+        const highlightsOutputContainer = document.getElementById('highlights-output-container');
+        const socialOutputContainer = document.getElementById('social-output-container');
+
+
+        let srtContent = '';
+        let currentVideoFile = null;
+
+        // --- Event Listeners ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadApiKey();
+            // Apply base styles to AI tool buttons
+            document.querySelectorAll('.ai-tool-btn').forEach(button => {
+                button.className = 'w-full bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-300 font-semibold py-3 px-4 rounded-lg border border-indigo-200 dark:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-gray-600 transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2';
+            });
+        });
+        
+        uploadSection.addEventListener('click', () => videoUpload.click());
+        videoUpload.addEventListener('change', handleFileSelect);
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            uploadSection.classList.add('bg-gray-50', 'dark:bg-gray-700/50', 'border-indigo-500');
+        });
+        uploadSection.addEventListener('dragleave', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            uploadSection.classList.remove('bg-gray-50', 'dark:bg-gray-700/50', 'border-indigo-500');
+        });
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            uploadSection.classList.remove('bg-gray-50', 'dark:bg-gray-700/50', 'border-indigo-500');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileSelect({ target: { files: files } });
+        });
+        
+        generateBtn.addEventListener('click', processVideo);
+        copyTranscriptBtn.addEventListener('click', () => copyToClipboard('transcript-output', copyTranscriptBtn, 'Copy Transcript'));
+        downloadSrtBtn.addEventListener('click', downloadSrtFile);
+        startOverBtn.addEventListener('click', resetUI);
+        saveKeyBtn.addEventListener('click', saveApiKey);
+
+        // AI Tools Event Listeners
+        summarizeBtn.addEventListener('click', handleAiToolClick);
+        highlightsBtn.addEventListener('click', handleAiToolClick);
+        socialBtn.addEventListener('click', handleAiToolClick);
+
+        // --- Core Functions ---
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                if (file.size > 50 * 1024 * 1024) {
+                    showError("File is too large. Please upload a video under 50MB.");
+                    return;
+                }
+                currentVideoFile = file;
+                const videoURL = URL.createObjectURL(file);
+                videoPreview.src = videoURL;
+                uploadSection.classList.add('hidden');
+                processingSection.classList.remove('hidden');
+                resultsSection.classList.add('hidden');
+                errorBox.classList.add('hidden');
+                updateGenerateButtonState();
+            }
+        }
+
+        function resetUI() {
+            currentVideoFile = null;
+            srtContent = '';
+            videoUpload.value = '';
+            videoPreview.src = '';
+            uploadSection.classList.remove('hidden');
+            processingSection.classList.add('hidden');
+            resultsSection.classList.add('hidden');
+            errorBox.classList.add('hidden');
+            loaderContainer.classList.add('hidden');
+            statusText.textContent = 'Processing video...';
+            // Clear AI tool outputs
+            summaryOutputContainer.innerHTML = '';
+            highlightsOutputContainer.innerHTML = '';
+            socialOutputContainer.innerHTML = '';
+            summaryOutputContainer.classList.add('hidden');
+            highlightsOutputContainer.classList.add('hidden');
+            socialOutputContainer.classList.add('hidden');
+            updateGenerateButtonState();
+        }
+
+        async function processVideo() {
+            if (!currentVideoFile || !apiKeyInput.value.trim()) {
+                showError("Please select a video and enter your API key.");
+                return;
+            }
+            generateBtn.style.display = 'none';
+            loaderContainer.classList.remove('hidden');
+            statusText.textContent = 'Reading video file...';
+            errorBox.classList.add('hidden');
+
+            try {
+                const base64Data = await fileToBase64(currentVideoFile);
+                statusText.textContent = 'Generating transcript... (this may take a moment)';
+                const transcript = await getTranscription(base64Data, currentVideoFile.type);
+                if (!transcript) throw new Error("Failed to generate transcript.");
+                transcriptOutput.value = transcript;
+
+                statusText.textContent = 'Generating SRT captions...';
+                srtContent = await getSrt(transcript);
+                if (!srtContent) throw new Error("Failed to generate SRT file.");
+
+                processingSection.classList.add('hidden');
+                resultsSection.classList.remove('hidden');
+            } catch (err) {
+                console.error("Processing Error:", err);
+                showError(err.message || "An unknown error occurred during processing.");
+                generateBtn.style.display = 'block';
+                loaderContainer.classList.add('hidden');
+            }
+        }
+
+        async function handleAiToolClick(event) {
+            const button = event.currentTarget;
+            const toolType = button.id.replace('-btn', '');
+            const outputContainer = document.getElementById(`${toolType}-output-container`);
+            const transcript = transcriptOutput.value;
+
+            if (!transcript) {
+                showError("A transcript must be generated first.");
+                return;
+            }
+
+            button.disabled = true;
+            button.innerHTML = `<div class="loader small-loader"></div> Generating...`;
+            outputContainer.classList.remove('hidden');
+            outputContainer.innerHTML = ''; // Clear previous content
+
+            try {
+                let prompt, title;
+                switch (toolType) {
+                    case 'summarize':
+                        prompt = `Based on the following video transcript, provide a concise, one-paragraph summary:\n\n"${transcript}"`;
+                        title = 'Summary';
+                        break;
+                    case 'highlights':
+                        prompt = `Analyze this video transcript and extract the 3-5 most important key moments or highlights. Present them as a bulleted list:\n\n"${transcript}"`;
+                        title = 'Key Moments';
+                        break;
+                    case 'social':
+                        prompt = `Create a short, engaging social media post (like for Twitter or LinkedIn) based on this video transcript. Include 2-3 relevant hashtags:\n\n"${transcript}"`;
+                        title = 'Social Post Draft';
+                        break;
+                }
+                
+                const result = await callGeminiApi("gemini-1.5-flash", { contents: [{ parts: [{ text: prompt }] }] });
+                if (!result) throw new Error(`The AI did not return a result for ${toolType}.`);
+                
+                renderAiOutput(outputContainer, title, result, toolType);
+
+            } catch (err) {
+                showError(err.message);
+                outputContainer.classList.add('hidden');
+            } finally {
+                button.disabled = false;
+                // Restore original button text
+                const originalText = toolType.charAt(0).toUpperCase() + toolType.slice(1).replace(/([A-Z])/g, ' $1').trim();
+                button.innerHTML = `<span>${originalText.replace('Social', 'Draft Social Post').replace('Highlights', 'Find Key Moments')}</span>`;
+            }
+        }
+        
+        function renderAiOutput(container, title, content, type) {
+            const outputId = `${type}-output-text`;
+            container.innerHTML = `
+                <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border dark:border-gray-700">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-semibold text-gray-800 dark:text-gray-200">${title}</h3>
+                        <button id="copy-${type}-btn" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Copy</button>
+                    </div>
+                    <textarea id="${outputId}" rows="5" class="w-full p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md" readonly>${content}</textarea>
+                </div>
+            `;
+            document.getElementById(`copy-${type}-btn`).addEventListener('click', (e) => {
+                copyToClipboard(outputId, e.currentTarget, 'Copy');
+            });
+        }
+
+
+        // --- Gemini API Calls ---
+        
+        async function getTranscription(base64Data, mimeType) {
+            const prompt = "Transcribe the audio from this video. Provide only the raw text of the transcription, without any additional comments, titles, or formatting.";
+            const model = "gemini-1.5-flash";
+            const payload = { contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType, data: base64Data } }] }] };
+            return callGeminiApi(model, payload);
+        }
+
+        async function getSrt(transcript) {
+            const prompt = `Convert the following transcript into a standard SRT (SubRip Text) file format. The output should be only the SRT content. Start with number 1. Use standard timestamp format (HH:MM:SS,ms --> HH:MM:SS,ms). Break the lines into logical caption blocks suitable for viewing.\n\nTranscript:\n"${transcript}"`;
+            const model = "gemini-1.5-flash";
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+            return callGeminiApi(model, payload);
+        }
+
+        async function callGeminiApi(model, payload) {
+            const apiKey = apiKeyInput.value.trim();
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            let attempts = 0, maxAttempts = 5, delay = 1000;
+
+            while (attempts < maxAttempts) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        const errorBody = await response.json();
+                        throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorBody?.error?.message || 'Unknown error'}`);
+                    }
+                    const result = await response.json();
+                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) return text.trim();
+                    
+                    const finishReason = result?.candidates?.[0]?.finishReason;
+                    if (finishReason && finishReason !== 'STOP') {
+                         throw new Error(`API call finished unexpectedly. Reason: ${finishReason}.`);
+                    }
+                    return null;
+                } catch (error) {
+                    attempts++;
+                    if (attempts >= maxAttempts) throw error;
+                    console.log(`API call failed, attempt ${attempts}. Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        // --- Utility and API Key Functions ---
+
+        function loadApiKey() {
+            const savedKey = localStorage.getItem('geminiApiKey');
+            if (savedKey) apiKeyInput.value = savedKey;
+            updateGenerateButtonState();
+        }
+
+        function saveApiKey() {
+            const key = apiKeyInput.value.trim();
+            if (key) {
+                localStorage.setItem('geminiApiKey', key);
+                saveKeyBtn.textContent = 'Saved!';
+                setTimeout(() => { saveKeyBtn.textContent = 'Save'; }, 2000);
+                updateGenerateButtonState();
+                errorBox.classList.add('hidden');
+            } else {
+                showError("API Key cannot be empty.");
+            }
+        }
+
+        function updateGenerateButtonState() {
+            const hasFile = currentVideoFile !== null;
+            const hasKey = apiKeyInput.value.trim() !== '';
+            generateBtn.disabled = !(hasFile && hasKey);
+            generateBtn.style.display = 'block';
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
+        }
+        
+        function copyToClipboard(elementId, buttonElement, originalText) {
+            const textarea = document.getElementById(elementId);
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = textarea.value;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            try {
+                document.execCommand('copy');
+                buttonElement.textContent = 'Copied!';
+                setTimeout(() => { buttonElement.textContent = originalText; }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+                showError("Could not copy text to clipboard.");
+            }
+            document.body.removeChild(tempTextArea);
+        }
+
+        function downloadSrtFile() {
+            if (!srtContent) {
+                showError("No SRT content available to download.");
+                return;
+            }
+            const blob = new Blob([srtContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const baseName = currentVideoFile.name.split('.').slice(0, -1).join('.');
+            a.download = `${baseName || 'captions'}.srt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorBox.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
